@@ -38,7 +38,7 @@ class phpspider
      * 版本号
      * @var string
      */
-    const VERSION = '2.0.7';
+    const VERSION = '2.1.3';
 
     /**
      * 爬虫爬取每个网页的时间间隔,0表示不延时, 单位: 毫秒
@@ -156,7 +156,7 @@ class phpspider
          'headers'     => array(), // 此url的Headers, 可以为空
          'params'      => array(), // 发送请求时需添加的参数, 可以为空
          'context_data'=> '',      // 此url附加的数据, 可以为空
-         'proxies'     => false,   // 是否使用代理
+         'proxy'       => false,   // 是否使用代理
          'try_num'     => 0        // 抓取次数
          'max_try'     => 0        // 允许抓取失败次数
      ) 
@@ -361,7 +361,7 @@ class phpspider
         }
 
         $configs['name']       = isset($configs['name'])       ? $configs['name']       : 'phpspider';
-        $configs['proxies']    = isset($configs['proxies'])    ? $configs['proxies']    : array();
+        $configs['proxy']      = isset($configs['proxy'])      ? $configs['proxy']      : false;
         $configs['user_agent'] = isset($configs['user_agent']) ? $configs['user_agent'] : self::AGENT_PC;
         $configs['client_ip']  = isset($configs['client_ip'])  ? $configs['client_ip']  : array();
         $configs['interval']   = isset($configs['interval'])   ? $configs['interval']   : self::INTERVAL;
@@ -873,14 +873,14 @@ class phpspider
             self::$configs['name'] = iconv("UTF-8", "GB2312//IGNORE", self::$configs['name']);
             log::$log_show = true;
         }
+        // 守护进程下也显示日志
+        elseif (self::$daemonize) 
+        {
+            log::$log_show = true;
+        }
         else 
         {
             log::$log_show = isset(self::$configs['log_show']) ? self::$configs['log_show'] : false;
-        }
-
-        if (self::$daemonize) 
-        {
-            log::$log_show = true;
         }
 
         if (log::$log_show)
@@ -900,10 +900,10 @@ class phpspider
         }
 
         // 如果是守护进程，恢复日志状态
-        if (self::$daemonize) 
-        {
-            log::$log_show = isset(self::$configs['log_show']) ? self::$configs['log_show'] : false;
-        }
+        //if (self::$daemonize) 
+        //{
+            //log::$log_show = isset(self::$configs['log_show']) ? self::$configs['log_show'] : false;
+        //}
 
         // 多任务和分布式都要清掉, 当然分布式只清自己的
         $this->init_redis();
@@ -1233,9 +1233,9 @@ class phpspider
         }
 
         // 是否设置了代理
-        if (!empty($link['proxies'])) 
+        if ($link['proxy']) 
         {
-            requests::set_proxies($link['proxies']);
+            requests::set_proxy($link['proxy']);
         }
 
         // 如何设置了 HTTP Headers
@@ -1550,6 +1550,9 @@ class phpspider
             }
             else
             {
+                $arr = explode("/", $base_url_path);
+                array_pop($arr);
+                $base_url_path = implode("/", $arr);
                 $url = $base_url_path.'/'.$url;
             }
         }
@@ -1607,9 +1610,9 @@ class phpspider
             unset($link['context_data']);
         }
 
-        if (empty($link['proxies'])) 
+        if (empty($link['proxy'])) 
         {
-            unset($link['proxies']);
+            unset($link['proxy']);
         }
 
         if (empty($link['try_num'])) 
@@ -1648,7 +1651,7 @@ class phpspider
             'headers'      => isset($link['headers'])      ? $link['headers']      : array(),    
             'params'       => isset($link['params'])       ? $link['params']       : array(),           
             'context_data' => isset($link['context_data']) ? $link['context_data'] : '',                
-            'proxies'      => isset($link['proxies'])      ? $link['proxies']      : self::$configs['proxies'],             
+            'proxy'        => isset($link['proxy'])        ? $link['proxy']        : self::$configs['proxy'],             
             'try_num'      => isset($link['try_num'])      ? $link['try_num']      : 0,                 
             'max_try'      => isset($link['max_try'])      ? $link['max_try']      : self::$configs['max_try'],
             'depth'        => isset($link['depth'])        ? $link['depth']        : 0,             
@@ -1767,7 +1770,7 @@ class phpspider
                 exit;
             }
 
-            $values = array();
+            $values = NULL;
             // 如果定义抽取规则
             if (!empty($conf['selector'])) 
             {
@@ -1816,9 +1819,10 @@ class phpspider
                 }
 
                 // field不为空而且存在子配置
-                if (!empty($values) && !empty($conf['children'])) 
+                if (isset($values) && !empty($conf['children'])) 
                 {
-                    if (!$values) 
+                    // 如果提取到的结果是字符串，就转为数组，方便下面统一foreach
+                    if (!is_array($values)) 
                     {
                         $values = array($values);
                     }
@@ -1841,7 +1845,7 @@ class phpspider
                 }
             }
 
-            if (empty($values)) 
+            if (!isset($values)) 
             {
                 // 如果值为空而且值设置为必须项, 跳出foreach循环
                 if ($required) 
@@ -2004,7 +2008,7 @@ class phpspider
             {
                 foreach ($keys as $key) 
                 {
-                    $key = str_replace($GLOBALS['config']['redis']['prefix'].":", "", $key);
+                    $key = str_replace(self::$queue_config['prefix'].":", "", $key);
                     queue::del($key);
                 }
             }

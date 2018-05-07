@@ -82,9 +82,9 @@ class requests
      * @author seatle <seatle@foxmail.com> 
      * @created time :2016-09-18 10:17
      */
-    public static function set_proxies($proxies)
+    public static function set_proxy($proxy)
     {
-        self::$proxies = $proxies;
+        self::$proxies = is_array($proxy) ? $proxy : array($proxy);
     }
 
     /**
@@ -202,19 +202,59 @@ class requests
      * @author seatle <seatle@foxmail.com> 
      * @created time :2017-08-03 18:06
      */
+    public static function del_cookie($key, $domain = '')
+    {
+        if (empty($key)) 
+        {
+            return false;
+        }
+
+        if (!empty($domain) && !isset(self::$domain_cookies[$domain])) 
+        {
+            return false;
+        }
+
+        if (!empty($domain)) 
+        {
+            if (isset(self::$domain_cookies[$domain][$key])) 
+            {
+                unset(self::$domain_cookies[$domain][$key]);
+            }
+        }
+        else 
+        {
+            if (isset(self::$cookies[$key])) 
+            {
+                unset(self::$cookies[$key]);
+            }
+        }
+        return true;
+    }
+
+    /**
+     * 删除Cookie
+     * 
+     * @param string $domain  不传则删除全局Cookie
+     * @return void
+     * @author seatle <seatle@foxmail.com> 
+     * @created time :2017-08-03 18:06
+     */
     public static function del_cookies($domain = '')
     {
         if (!empty($domain) && !isset(self::$domain_cookies[$domain])) 
         {
             return false;
         }
-        if ( empty($domain)) 
+        if ( empty($domain) ) 
         {
-            unset(self::$cookies);
+            self::$cookies = array();
         }
         else 
         {
-            unset(self::$domain_cookies[$domain]);
+            if (isset(self::$domain_cookies[$domain])) 
+            {
+                unset(self::$domain_cookies[$domain]);
+            }
         }
         return true;
     }
@@ -640,14 +680,26 @@ class requests
             if (!empty($fields)) 
             {
                 // 不是上传文件的，用http_build_query, 能实现更好的兼容性，更小的请求数据包
-                if (is_array($fields) && empty($file_fields)) 
+                if ( empty($file_fields) ) 
                 {
-                    $fields = http_build_query($fields);
+                    // post方式
+                    if ( is_array($fields) ) 
+                    {
+                        $fields = http_build_query($fields);
+                    }
                 }
                 else 
                 {
-                    // 某些server可能会有问题
-                    $fields = array_merge($fields, $file_fields);
+                    // 有post数据
+                    if ( is_array($fields) && !empty($fields) ) 
+                    {
+                        // 某些server可能会有问题
+                        $fields = array_merge($fields, $file_fields);
+                    }
+                    else 
+                    {
+                        $fields = $file_fields;
+                    }
                 }
                 // 不能直接传数组，不知道是什么Bug，会非常慢
                 curl_setopt( self::$ch, CURLOPT_POSTFIELDS, $fields );
